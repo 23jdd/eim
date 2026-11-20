@@ -402,41 +402,36 @@ ui.Add(eim.WidgetFunc(func(ui *eim.UI) eim.Response {
 |---|---|
 | 布局 | `ItemRect` `AdvanceItem` `SameLine` `NewLine` `Spacing` `Dummy` `Indent` `BeginChild/EndChild` `ContentRegionAvail` `CursorPos/SetCursorPos` |
 | 事件 | `Hit` `Events.*` `ItemHovered` `Focused/SetFocus/ClearFocus` `ID/PushID/PopID` `Input` |
-| 绘制 | 全部图元 + `Text` `TextCentered` `TextLeft/TextRight` `TextSize` `TextHeight` `WrapText` `Image` `DrawImage` `PushClip/PopClip` |
+| 绘制 | 全部图元 + `Text` `TextCentered` `TextLeft/TextRight` `TextSize` `TextHeight` `WrapText` `Image` `DrawImage` `DrawImageFile` `PushClip/PopClip` |
 | 样式 | `Style()`（可直接改字段，跨帧保留）`Scale()` |
 
 ---
 
 ## 图片
 
+`Image` 和别的控件一样走布局：在光标处绘制、返回实际矩形、推进光标。
+
 ```go
-ui.Image("assets/logo.png", eim.Rect{X: 0, Y: 0, W: 64, H: 64})
+ui.Image("assets/logo.png", eim.Vec2{X: 64, Y: 64})
 ```
+
+| 调用 | 效果 |
+|---|---|
+| `ui.Image(path, eim.Vec2{X: 64, Y: 64})` | 拉伸到 64×64 |
+| `ui.Image(path, eim.Vec2{X: 200})` | 宽 200，高按原图比例 |
+| `ui.Image(path, eim.Vec2{Y: 100})` | 高 100，宽按原图比例 |
+| `ui.Image(path, eim.Vec2{})` | 原图像素尺寸（1 像素 = 1 逻辑单位） |
 
 - 路径相对于进程工作目录，支持 png / jpeg / gif
 - **按路径缓存**，同一路径只读一次盘
-- 加载失败时什么也不画；要错误处理或预加载用 `LoadImageFile`
+- 加载失败返回空矩形，且**不推进布局**；要错误处理用 `LoadImageFile`
+- `ui.ImageSize(path)` 返回原始像素尺寸，失败返回 `0, 0`
+
+不参与布局的场合（背景图、自定义绘制）：
 
 ```go
-w, h := ui.ImageSize("assets/logo.png") // 原始像素尺寸，失败返回 0,0
-
-img, err := eim.LoadImageFile("assets/logo.png")
-if err != nil {
-	log.Fatal(err)
-}
-ui.DrawImage(img, r) // 画已加载的图片（也支持子图、渲染目标）
-```
-
-按宽高比排版：
-
-```go
-w, h := ui.ImageSize(path)
-if h > 0 {
-	width := 200
-	r := ui.ItemRect(float32(width), float32(width)*h/w)
-	ui.Image(path, r)
-	ui.AdvanceItem(r)
-}
+ui.DrawImageFile("assets/bg.png", eim.Rect{X: 0, Y: 0, W: 600, H: 400}) // 绝对定位
+ui.DrawImage(img, r) // 已加载的 *ebiten.Image，也支持子图和渲染目标
 ```
 
 ---

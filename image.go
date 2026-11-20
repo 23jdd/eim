@@ -38,39 +38,53 @@ func (c *Context) image(path string) (*ebiten.Image, error) {
 	return img, err
 }
 
-// Image 从文件路径加载图片，缩放绘制到 r（逻辑单位）。
-//
-// 路径相对于进程工作目录；同一个路径只读一次盘，之后走缓存。
-// 加载失败时什么也不画——需要错误处理就用 LoadImageFile 自己加载，
-// 再用 DrawImage 画。
-func (ui *UI) Image(path string, r Rect) {
-	var (
-		img *ebiten.Image
-		err error
-	)
+func (ui *UI) imageFor(path string) (*ebiten.Image, error) {
 	if ui.ctx != nil {
-		img, err = ui.ctx.image(path)
-	} else {
-		img, err = LoadImageFile(path)
+		return ui.ctx.image(path)
 	}
+	return LoadImageFile(path)
+}
+
+// Image 在布局光标处绘制图片，并推进布局。
+//
+// size 是逻辑尺寸：
+//   - 都为 0：用原图像素尺寸（1 像素 = 1 逻辑单位）
+//   - 只给宽：按原图宽高比算高；只给高：按比例算宽
+//   - 都给：拉伸到该尺寸
+//
+// 返回实际占用的矩形；加载失败时返回空矩形且不推进布局。
+// 路径相对于进程工作目录，同一个路径只读一次盘。
+func (ui *UI) Image(path string, size Vec2) Rect {
+	img, err := ui.imageFor(path)
 	if err != nil || img == nil {
-		return
+		return Rect{}
 	}
+	b := img.Bounds()
+	iw, ih := float32(b.Dx()), float32(b.Dy())
+	if iw <= 0 || ih <= 0 {
+		return Rect{}
+	}
+
+	w, h := size.X, size.Y
+	switch {
+	case w <= 0 && h <= 0:
+		w, h = iw, ih
+	case w <= 0:
+		w = h * iw / ih
+	case h <= 0:
+		h = w * ih / iw
+	}
+
+	r := ui.itemRect(w, h)
 	ui.DrawImage(img, r)
+	ui.advanceItem(r)
+	return r
 }
 
 // ImageSize 返回图片的像素尺寸，加载失败返回 (0, 0)。
-// 常用于按原始宽高比排版。
+// 原图尺寸可以直接用作 Image 的 size（1 像素 = 1 逻辑单位）。
 func (ui *UI) ImageSize(path string) (w, h float32) {
-	var (
-		img *ebiten.Image
-		err error
-	)
-	if ui.ctx != nil {
-		img, err = ui.ctx.image(path)
-	} else {
-		img, err = LoadImageFile(path)
-	}
+	img, err := ui.imageFor(path)
 	if err != nil || img == nil || img.Bounds().Empty() {
 		return 0, 0
 	}
@@ -78,7 +92,17 @@ func (ui *UI) ImageSize(path string) (w, h float32) {
 	return float32(b.Dx()), float32(b.Dy())
 }
 
-// DrawImage 把已经加载好的图片缩放绘制到 r（逻辑单位）。
+// DrawImageFile 从文件加载图片并绘制到指定矩形（绝对定位，不参与布局）。
+// 布局里请用 Image。
+func (ui *UI) DrawImageFile(path string, r Rect) {
+	img, err := ui.imageFor(path)
+	if err != nil || img == nil {
+		return
+	}
+	ui.DrawImage(img, r)
+}
+
+// DrawImage 把已经加载好的图片缩放绘制到 r（逻辑单位，绝对定位）。
 func (ui *UI) DrawImage(img *ebiten.Image, r Rect) {
 	if img == nil || r.Empty() {
 		return

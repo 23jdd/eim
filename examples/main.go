@@ -46,6 +46,7 @@ func draw(ui *eim.UI) {
 	ui.SetRegion(content)
 
 	ui.TextColored("eim: layout / widgets / events", ui.Style().Accent)
+	ui.Image("logo.png", eim.Vec2{X: 100}) // 布局里画：宽 32，高按原图比例
 	ui.Separator()
 
 	// 两列：两个 BeginChild 并排
@@ -98,7 +99,6 @@ func rightColumn(ui *eim.UI) {
 	ui.SliderInt("int", &ival, 0, 100)
 	ui.RangeSlider("range", &lo, &hi, 0, 1)
 	ui.DragFloat("drag", &drag, 0.1)
-
 	ui.Spacing()
 	ui.Knob("knob", &knob, 0, 1)
 	if ui.ItemHovered() {

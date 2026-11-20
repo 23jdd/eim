@@ -55,19 +55,60 @@ func TestImageSizeCache(t *testing.T) {
 	if a != b {
 		t.Fatalf("image should be cached by path")
 	}
-	// 没有 screen 时绘制是 no-op，但不应 panic
-	ui.Image(path, Rect{X: 0, Y: 0, W: 40, H: 30})
+}
+
+func TestImageLayout(t *testing.T) {
+	path := writeTestPNG(t)
+	ctx := &Context{}
+	ui := newUI(nil, ctx)
+	ui.SetRegion(Rect{0, 0, 300, 300})
+
+	// 只给宽：按原图比例算高（4x3 -> 40x30）
+	r := ui.Image(path, Vec2{X: 40})
+	if r.W != 40 || r.H != 30 {
+		t.Fatalf("aspect ratio: got %vx%v; want 40x30", r.W, r.H)
+	}
+	if got, want := ui.CursorPos().Y, 30+ui.style.ItemSpacing.Y; got != want {
+		t.Fatalf("layout advance: got %v; want %v", got, want)
+	}
+
+	// 只给高：按比例算宽
+	r = ui.Image(path, Vec2{Y: 30})
+	if r.W != 40 || r.H != 30 {
+		t.Fatalf("aspect ratio by height: got %vx%v; want 40x30", r.W, r.H)
+	}
+
+	// 都不给：原图尺寸
+	ui.SetRegion(Rect{0, 0, 300, 300})
+	r = ui.Image(path, Vec2{})
+	if r.W != 4 || r.H != 3 {
+		t.Fatalf("natural size: got %vx%v; want 4x3", r.W, r.H)
+	}
+
+	// 都给：拉伸
+	r = ui.Image(path, Vec2{X: 20, Y: 50})
+	if r.W != 20 || r.H != 50 {
+		t.Fatalf("stretch: got %vx%v; want 20x50", r.W, r.H)
+	}
 }
 
 func TestImageMissing(t *testing.T) {
 	ctx := &Context{}
 	ui := newUI(nil, ctx)
+	ui.SetRegion(Rect{0, 0, 300, 300})
 	missing := filepath.Join(t.TempDir(), "nope.png")
 
 	if w, h := ui.ImageSize(missing); w != 0 || h != 0 {
 		t.Fatalf("missing image size: got %vx%v", w, h)
 	}
-	ui.Image(missing, Rect{W: 10, H: 10}) // 不 panic
+	// 加载失败不推进布局
+	if r := ui.Image(missing, Vec2{X: 40}); !r.Empty() {
+		t.Fatalf("missing image should return empty rect: %v", r)
+	}
+	if got := ui.CursorPos(); got != (Vec2{}) {
+		t.Fatalf("layout should not advance: %v", got)
+	}
+	ui.DrawImageFile(missing, Rect{W: 10, H: 10}) // 不 panic
 
 	if _, err := ctx.image(missing); err == nil {
 		t.Fatalf("missing image should return an error")
